@@ -4,61 +4,56 @@ struct GaussianMap{G <: GaussianRelation, M <: AbstractMatrix}
 end
 
 
-function disintegrate(relation::GaussianRelation, indices₁::AbstractVector, indices₂::AbstractVector)
-    i₁ = indices₁
-    i₂ = indices₂
+function disintegrate(relation::GaussianRelation, mask::AbstractVector{Bool})
+    i₁ = .!mask
+    i₂ =   mask
 
-    A₁₁ = relation.A[i₁, i₂]
-    A₁₂ = relation.A[i₁, i₂]
-    A₂₂ = relation.A[i₂, i₂]
-    B₁₁ = relation.B[i₁, i₁]
-    B₁₂ = relation.B[i₁, i₂]
-    B₂₂ = relation.B[i₂, i₂]
-    a₁ = relation.a[i₁]
-    a₂ = relation.a[i₂]
-    b₁ = relation.b[i₁]
-    b₂ = relation.b[i₂]
+    A₁₁, A₁₂, A₂₁, A₂₂ = getblocks(relation.A, i₁, i₂)
+    B₁₁, B₁₂, B₂₁, B₂₂ = getblocks(relation.B, i₁, i₂)
+    a₁, a₂ = getblocks(relation.a, i₁, i₂)
+    b₁, b₂ = getblocks(relation.b, i₁, i₂)
     β = relation.β
 
-    saddlepoint = SaddlePoint(A₁₁, B₁₁)
-    L = solve(saddlepoint, A₁₂, B₁₂)    
-    l = solve(saddlepoint, a₁,  b₁)
+    problem = SaddlePointProblem(A₁₁, B₁₁)
+    L = solve(problem, A₁₂, B₁₂)    
+    l = solve(problem, a₁,  b₁)
 
     marginal = GaussianRelation(
-        A₂₂ + L' * A₁₁ * L - A₁₂' * L - L' * A₁₂, 
+        A₂₂ + L' * A₁₁ * L - A₂₁ * L - L' * A₁₂, 
         B₂₂ - L' * B₁₁ * L,
-        a₂  + L' * A₁₁ * l - A₁₂' * l - L' * a₁,
+        a₂  + L' * A₁₁ * l - A₂₁ * l - L' * a₁,
         b₂  - L' * B₁₁ * l,
         β   - l' * B₁₁ * l)
 
     conditional = GaussianMap(
-        GaussianRelation(A₁₁, B₁₁, a₁, b₁, l' * b),
+        GaussianRelation(A₁₁, B₁₁, a₁, b₁, l' * b₁),
         -L)
 
     marginal, conditional
 end
 
 
-#=
-function marginalize(relation::GaussianRelation, indices::AbstractVector)
-    m = length(relation)
-    n = length(indices)
-    indices₁ = Vector{Int}(undef, m - n)
-    indices₂ = indices
-    mask = falses(m)
-    mask[indices] .= true    
-
-    i = 1
-
-    for j in 1:m
-        if !mask[j]
-            indices₁[i] = j
-            i += 1
-        end
-    end
-
-    marginal, _ = disintegrate(relation, indices₁, indices₂)
+function marginalize(relation::GaussianRelation, mask::AbstractVector)
+    marginal, _ = disintegrate(relation, mask)
     marginal
+end
+
+
+function getblocks(M::AbstractMatrix, i₁::AbstractVector, i₂::AbstractVector)
+    M₁₁ = M[i₁, i₁]
+    M₁₂ = M[i₁, i₂]
+    M₂₁ = M[i₂, i₁]
+    M₂₂ = M[i₂, i₂]
+
+    M₁₁, M₁₂, M₂₁, M₂₂
+end
+
+
+function getblocks(v::AbstractVector, i₁::AbstractVector, i₂::AbstractVector)
+    v₁ = v[i₁]
+    v₂ = v[i₂]
+
+    v₁, v₂
 end
 
 
@@ -68,43 +63,63 @@ function WiringDiagramAlgebras.oapply(
 
     n = nparts(diagram, :Junction)
     m = nparts(diagram, :OuterPort)
-    relation = GaussianRelation(n)
-    result = GaussianRelation(m)
+
+    A′ = zeros(n, n)
+    B′ = zeros(n, n)
+    a′ = zeros(n)
+    b′ = zeros(n)
+    β′ = 0.
+
+    A = zeros(m, m)
+    B = zeros(m, m)
+    a = zeros(m)
+    b = zeros(m)
+    β = 0.
 
     # merge and create
     for b in parts(diagram, :Box)
-        ports = incident(diagram b, :box)
+        ports = incident(diagram, b, :box)
         junctions = diagram[ports, :junction]
         generator = generators[b]
 
-        relation.A[junctions, junctions] .+= generator.A
-        relation.B[junctions, junctions] .+= generator.B
-        relation.a[junctions] .+= generator.a
-        relation.b[junctions] .+= generator.b
-        relation.β .+= generator.β
+        A′[junctions, junctions] .+= generator.A
+        B′[junctions, junctions] .+= generator.B
+        a′[junctions] .+= generator.a
+        b′[junctions] .+= generator.b
+        β′ += generator.β
     end
+
+    relation′ = GaussianRelation(A′, B′, a′, b′, β′)
 
     # delete
-    epi, mono = epi_mono(diagram[:, :outer_junction])
-    relation = marginalize(relation, mono)
+    mask = falses(n)
+    section = Int[]
 
-    # copy
-    l = length(mono)
-    counts = Vector{Int}(undef, l)
+    for p in parts(diagram, :OuterPort)
+        j = diagram[p, :outer_junction]
 
-    for i in 1:l
-        ports = incident(diagram, mono[i], :outer_junction)
-        counts[i] = length(ports)
+        if !mask[j]
+            mask[j] = true
+            push!(section, p)
+        end
     end
 
-    result.A .= relation.A[epi, epi] ./ outer(counts[epi], counts[epi])
-    result.B .= relation.B[epi, epi] ./ outer(counts[epi], counts[epi])
-                                     .+ 3I
-                                     .- I(l)[f, f]
-    result.a .= relation.a[epi]
-    result.b .= relation.b[epi]
-    result.β .= relation.β
+    relation′ = marginalize(relation′, mask)
 
-    result
+    # copy
+    A[section, section] .= relation′.A
+    B[section, section] .= relation′.B
+    a[section] .= relation′.a
+    b[section] .= relation′.b
+    β = relation′.β
+
+    for p in section
+        j = diagram[p, :outer_junction]
+        ports = incident(diagram, j, :outer_junction)
+        B[ports, ports] .+= 3I
+        B[ports, ports] .-= 1
+    end
+
+    relation = GaussianRelation(A, B, a, b, β)
+    relation
 end
-=#

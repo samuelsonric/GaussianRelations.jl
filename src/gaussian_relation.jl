@@ -1,4 +1,4 @@
-A Gaussian relation.
+# A Gaussian relation.
 struct GaussianRelation{
     M₁ <: AbstractMatrix,
     M₂ <: AbstractMatrix,

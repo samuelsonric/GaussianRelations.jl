@@ -2,3 +2,8 @@ name = "GaussianRelations"
 uuid = "8e80e5df-fef1-4887-b628-3eb47b49e5ff"
 authors = ["Richard Samuelson <samuelson.rick@gmail.com>"]
 version = "0.1.0"
+
+[deps]
+Catlab = "134e5e36-593f-5add-ad60-77f754baafbe"
+CommonSolve = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
