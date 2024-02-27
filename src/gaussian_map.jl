@@ -59,6 +59,18 @@ end
 
 function WiringDiagramAlgebras.oapply(
     diagram::UndirectedWiringDiagram,   
+    generators::AbstractDict{<:Any, <:GaussianRelation})
+
+    generators = map(diagram[:, :name]) do name
+        generators[name]
+    end
+
+    oapply(diagram, generators)
+end
+
+
+function WiringDiagramAlgebras.oapply(
+    diagram::UndirectedWiringDiagram,   
     generators::AbstractVector{<:GaussianRelation})
 
     n = nparts(diagram, :Junction)
@@ -116,7 +128,7 @@ function WiringDiagramAlgebras.oapply(
     for p in section
         j = diagram[p, :outer_junction]
         ports = incident(diagram, j, :outer_junction)
-        B[ports, ports] .+= 3I
+        B[ports, ports] .+= 3I(length(ports))
         B[ports, ports] .-= 1
     end
 
