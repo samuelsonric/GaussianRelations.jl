@@ -102,12 +102,42 @@ function dual(relation::CenteredCovarianceForm)
 end
 
 
+function otimes(left::CenteredPrecisionForm, right::CenteredPrecisionForm)
+    Ω₁, S₁ = params(left)
+    Ω₂, S₂ = params(right)
+    Ω = cat(Ω₁, Ω₂, dims=(1, 2))
+    S = cat(S₁, S₂, dims=(1, 2))
+    CenteredPrecisionForm(Ω, S)
+end
+
+
+function otimes(left::CenteredCovarianceForm, right::CenteredCovarianceForm)
+    dual(otimes(dual(left), dual(right)))
+end
+
+
 # Compute the composite
 #     (f ; M†): 0 → m
 # where f: 0 → n is a centered Gaussian relation and M: m → n. is a matrix.
-function Base.:*(relation::CenteredPrecisionForm, M::AbstractMatrix)
+function Base.:\(M::AbstractMatrix, relation::CenteredPrecisionForm)
     Ω, S = params(relation)
     CenteredPrecisionForm(M' * Ω * M, M' * S * M)
+end
+
+
+# Compute the composite
+#     (f ; M†): 0 → m
+# where f: 0 → n is a centered Gaussian relation and M: m → n. is a matrix.
+function Base.:\(M::AbstractMatrix, relation::CenteredCovarianceForm)
+    CenteredCovarianceForm(M \ CenteredPrecisionForm(relation))
+end
+
+
+# Compute the composite
+#     (f ; M): 0 → n
+# where f: 0 → m is a centered Gaussian relation and M: m → n is a matrix.
+function Base.:*(M::AbstractMatrix, relation::CenteredPrecisionForm)
+    CenteredPrecisionForm(M * CenteredCovarianceForm(relation))
 end
 
 
@@ -115,7 +145,7 @@ end
 #     (f ; M): 0 → n
 # where f: 0 → m is a centered Gaussian relation and M: m → n is a matrix.
 function Base.:*(M::AbstractMatrix, relation::CenteredCovarianceForm)
-    dual(dual(relation) * M')
+    dual(M' \ dual(relation))
 end
 
 

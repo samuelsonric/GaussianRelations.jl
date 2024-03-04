@@ -10,6 +10,11 @@ struct CovarianceForm{T₁, T₂} <: GaussianRelation
 end
 
 
+function PrecisionForm(μ::Real, ω²::Real)
+    PrecisionForm([μ], [ω²;;])
+end
+
+
 # Construct the Gaussian relation
 #     N(μ, Ω⁻¹)
 # in precision form.
@@ -28,6 +33,11 @@ end
 function PrecisionForm(relation::CovarianceForm; tol::Real=DEFAULT_TOLERANCE)
     inner = CenteredPrecisionForm(relation.inner; tol)
     PrecisionForm(inner)
+end
+
+
+function CovarianceForm(μ::Real, σ²::Real)
+    CovarianceForm([μ], [σ²;;])
 end
 
 
@@ -72,12 +82,19 @@ end
 
 
 # Get the parameters of a Gaussian relation.
-function StatsAPI.params(relation::CovarianceForm)
+function StatsAPI.params(relation::CovarianceForm; tol::Real=DEFAULT_TOLERANCE)
     Σ, F = params(relation.inner)
+    @assert Σ[1, 1] > tol || F[1, 1] > tol
 
-    μ = F[2:end, 1] / -F[1, 1]
-    Σ = Σ[2:end, 2:end] + Σ[1, 1] * μ * μ' + Σ[2:end, 1] * μ' + μ * Σ[1, 2:end]'
-    F = F[2:end, 2:end] - F[1, 1] * μ * μ'
+    if F[1, 1] > tol
+        μ = F[2:end, 1] / -F[1, 1]
+        Σ = Σ[2:end, 2:end] + Σ[1, 1] / F[1, 1] * F[2:end, 2:end] + Σ[2:end, 1] * μ' + μ * Σ[1, 2:end]'
+        F = F[2:end, 2:end] - F[1, 1] * μ * μ'
+    else
+        μ = Σ[2:end, 1] / -Σ[1, 1]
+        Σ = Σ[2:end, 2:end] - Σ[1, 1] * μ * μ'
+        F = F[2:end, 2:end]
+    end
     
     Σ, F, μ
 end
@@ -99,9 +116,39 @@ function kleisli(relation::CenteredCovarianceForm)
 end
 
 
-function Base.:*(relation::PrecisionForm, M::AbstractMatrix)
+function otimes(left::PrecisionForm, right::PrecisionForm)
+    m = length(left)
+    n = length(right)
+
+    M = [
+        1               Zeros(1, m)     Zeros(1, n)
+        Zeros(m, 1)     Eye(m)          Zeros(m, n)
+        1               Zeros(1, m)     Zeros(1, n)
+        Zeros(n, 1)     Zeros(n, m)     Eye(n)
+    ]
+
+    PrecisionForm(M \ otimes(left.inner, right.inner))
+end
+
+
+function otimes(left::CovarianceForm, right::CovarianceForm)
+    CovarianceForm(otimes(PrecisionForm(left), PrecisionForm(right)))
+end
+
+
+function Base.:\(M::AbstractMatrix, relation::PrecisionForm)
     m, n = size(M)
-    PrecisionForm(relation.inner * [1 Zeros(n)'; Zeros(m) M])
+    PrecisionForm([1 Zeros(n)'; Zeros(m) M] \ relation.inner)
+end
+
+
+function Base.:\(M::AbstractMatrix, relation::CovarianceForm)
+    CovarianceForm(M \ PrecisionForm(relation))
+end
+
+
+function Base.:*(M::AbstractMatrix, relation::PrecisionForm)
+    PrecisionForm(M * CovarianceForm(relation))
 end
 
 
@@ -117,7 +164,7 @@ end
 function Base.:+(relation::PrecisionForm, v::AbstractVector)
     n = length(v)
     M = [1 Zeros(n)'; v Eye(n)]
-    PrecisionForm(relation.inner * M)
+    PrecisionForm(M \ relation.inner)
 end
 
 
@@ -136,6 +183,12 @@ end
 # where ψ is a centered Gaussian relation.
 function Base.:+(relation::CenteredGaussianRelation, v::AbstractVector)
     kleisli(relation) + v
+end
+
+
+function Base.:+(relation::GaussianRelation, v::Real)
+    n = length(relation)
+    relation + fill(v, n)
 end
 
 
