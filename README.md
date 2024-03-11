@@ -9,7 +9,9 @@ GaussianRelations.jl is a Julia library that provides tools for working with Gau
 
 In the paper [Open Stochastic Systems](https://ieeexplore.ieee.org/abstract/document/6255764), Jan Willems defines a Gaussian linear system that he calls the "noisy resistor."
 
-<img src="resistor.png" width="259" height="215">
+<p align="center">
+    <img src="resistor.png" width="259" height="215">
+</p>
 
 Using our library, the noisy resistor can be implemented as follows.
 
@@ -103,6 +105,7 @@ diagram = @relation (V,) begin
     I₂(I)
 end
 
-# We can also constrain the system by applying an operad algebra to the preceding diagram.
+# We can also constrain the system by applying an operad algebra to the preceding
+# diagram.
 V = oapply(diagram, Dict(:IV₁ => IV₁, :I₂ => I₂), Dict(:I => 1, :V => 1))
 ```
