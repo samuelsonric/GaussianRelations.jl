@@ -18,12 +18,23 @@ const CovarianceForm = GaussianRelation{true}
 
 
 function GaussianRelation{T}(μ::Real, p²::Real) where T
-    GaussianRelation{T}([μ], [p²;;])
+    GaussianRelation{T}(μ, p², 0)
+end
+
+
+function GaussianRelation{T}(μ::Real, p²::Real, s²::Real) where T
+    GaussianRelation{T}([μ], [p²;;], [s²;;])
 end
 
 
 function GaussianRelation{T}(μ::AbstractVector, P::AbstractMatrix) where T
-    kleisli(CenteredGaussianRelation{T}(P)) + μ
+    n = length(μ)
+    GaussianRelation{T}(μ, P, Zeros(n, n))
+end
+
+
+function GaussianRelation{T}(μ::AbstractVector, P::AbstractMatrix, S::AbstractMatrix) where T
+    kleisli(CenteredGaussianRelation{T}(P, S)) + μ
 end
 
 
@@ -41,6 +52,11 @@ function GaussianRelation{T, PT, ST}(args...; kwargs...) where {T, PT, ST}
     inner = GaussianRelation{T}(args...; kwargs...).inner
     GaussianRelation(CenteredGaussianRelation{T, PT, ST}(inner))
 end 
+
+
+function Base.convert(::Type{GaussianRelation{T, PT, ST}}, relation::GaussianRelation{T}) where {T, PT, ST}
+    GaussianRelation{T, PT, ST}(relation)
+end
 
 
 function Base.length(relation::GaussianRelation)
@@ -87,7 +103,7 @@ end
 function Theories.otimes(left::GaussianRelation, right::GaussianRelation)
     m = length(left.inner)
     n = length(right.inner)
-    f = FinFunction([1:m; 1; m + 1:m + n - 1], m + n - 1)
+    f = FinDomFunctionVector([1:m; 1; m + 1:m + n - 1], FinSet(m + n), FinSet(m + n - 1))
     GaussianRelation(push_epi(f, otimes(left.inner, right.inner), Val(false)))
 end
 

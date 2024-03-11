@@ -211,7 +211,7 @@ function push_epi(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST},
     for i₁ in 1:m
         j₁ = parent[i₁]
 
-        for i₂ in 1:m
+        for i₂ in i₁:m
             j₂ = parent[i₂]
 
             p = relation.precision[i₁, i₂]
@@ -237,6 +237,8 @@ function push_epi(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST},
         end
     end
 
+    P = Symmetric(P)
+    S = Symmetric(S)
     pull_mono(FinFunction(section, m), CenteredGaussianRelation{T}(P, S), Val(T))
 end
 

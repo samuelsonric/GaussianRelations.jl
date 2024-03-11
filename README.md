@@ -7,13 +7,15 @@ GaussianRelations.jl is a Julia library that provides tools for working with Gau
 
 ## Example: A Noisy Resistor
 
-In Example 1 and Example 3 of the paper [Open Stochastic Systems](https://ieeexplore.ieee.org/abstract/document/6255764), Jan Willems defines a Gaussian linear system that he calls the "noisy resistor". Using our library, the noisy resistor can be implemented as follows.
+In the paper [Open Stochastic Systems](https://ieeexplore.ieee.org/abstract/document/6255764), Jan Willems defines a Gaussian linear system that he calls the "noisy resistor." Using our library, the noisy resistor can be implemented as follows.
 
 ```julia
 using Catlab
 using GaussianRelations
 
-# Example 1: A Noisy Resistor
+###############################
+# Example 1: A Noisy Resistor #
+###############################
 
 σ₁ = 1/2
 R₁ = 2
@@ -26,7 +28,9 @@ R₁ = 2
 # [-R₁ 1] [ V₁ ] = ϵ₁
 IV₁ = [-R₁ 1] \ ϵ₁
 
-# Example 3: The Noisy Resistor, Interconnected
+#################################################
+# Example 3: The Noisy Resistor, Interconnected #
+#################################################
 
 σ₂ = 2/3
 R₂ = 4
@@ -58,6 +62,42 @@ diagram = @relation (I, V) begin
     IV₂(I, V)
 end
 
-# We can also interconnect the systems by applying an operad algebra.
+# We can also interconnect the systems by applying an operad algebra to the preceding diagram.
 IV = oapply(diagram, Dict(:IV₁ => IV₁, :IV₂ => IV₂), Dict(:I => 1, :V => 1))
+
+# If a system is classical, access its parameters by calling the functions mean and cov.
+mean(IV)
+cov(IV)
+
+##################################################
+# Example 5: The Noisy Resistor With Constraints #
+##################################################
+
+# I₂ = 1 amp.
+I₂ = CovarianceForm(1, 0)
+
+# The constrained system solves the following equation:
+# [ 1 0 ]         [ I₁ ]
+# [ 0 1 ] [ I ]   [ V₁ ]
+# [ 1 0 ] [ V ] = [ I₂ ]
+IV = [1 0; 0 1; 1 0] \ otimes(IV₁, I₂)
+
+# Marginalize over I by computing
+#           [ I ]
+# V = [0 1] [ V ]
+V = [0 1] * IV
+
+# The constrained system corresponds to the following undirected wiring diagram.
+#    IV₁
+#   /   \
+#  I     V ---
+#   \
+#    I₂
+diagram = @relation (V,) begin
+    IV₁(I, V)
+    I₂(I)
+end
+
+# We can also constrain the system by applying an operad algebra to the preceding diagram.
+V = oapply(diagram, Dict(:IV₁ => IV₁, :I₂ => I₂), Dict(:I => 1, :V => 1))
 ```
