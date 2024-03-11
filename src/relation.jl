@@ -17,13 +17,13 @@ const PrecisionForm = GaussianRelation{false}
 const CovarianceForm = GaussianRelation{true}
 
 
-function GaussianRelation{T}(μ::Real, ω²::Real) where T
-    GaussianRelation{T}([μ], [ω²;;])
+function GaussianRelation{T}(μ::Real, p²::Real) where T
+    GaussianRelation{T}([μ], [p²;;])
 end
 
 
-function GaussianRelation{T}(μ::AbstractVector, Ω::AbstractMatrix) where T
-    kleisli(CenteredGaussianRelation{T}(Ω)) + μ
+function GaussianRelation{T}(μ::AbstractVector, P::AbstractMatrix) where T
+    kleisli(CenteredGaussianRelation{T}(P)) + μ
 end
 
 
@@ -48,38 +48,31 @@ function Base.length(relation::GaussianRelation)
 end
 
 
-function StatsAPI.params(relation::PrecisionForm, i::Integer)
-    @assert 1 <= i <= 4
-    params(relation)[i]
-end
-
-
-function StatsAPI.params(relation::CovarianceForm, i::Integer)
+function StatsAPI.params(relation::GaussianRelation, i::Integer)
     @assert 1 <= i <= 3
     params(relation)[i]
 end
 
 
-function StatsAPI.params(relation::PrecisionForm)
-    Ω, S = params(relation.inner)
-    Ω[2:end, 2:end], S[2:end, 2:end], Ω[2:end, 1], S[2:end, 1] 
+function StatsAPI.params(relation::GaussianRelation)
+    n = length(relation)
+    marginal, conditional, M = disintegrate(relation.inner, [true; Falses(n)])
+    params(conditional)..., reshape(M, n)
 end
 
 
-function StatsAPI.params(relation::CovarianceForm; tol::Real=DEFAULT_TOLERANCE)
-    Σ, F = params(relation.inner)
-    @assert Σ[1, 1] > tol || F[1, 1] > tol
+function Statistics.cov(relation::CovarianceForm)
+    params(relation, 1)
+end
 
-    if F[1, 1] > tol
-        μ = F[2:end, 1] / -F[1, 1]
-    else
-        μ = Σ[2:end, 1] / -Σ[1, 1]
-    end
 
-    Σ = Σ[2:end, 2:end] + Σ[1, 1] * μ * μ' +  Σ[2:end, 1] * μ' + μ * Σ[1, 2:end]'
-    F = F[2:end, 2:end] - F[1, 1] * μ * μ'
-    
-    Σ, F, μ
+function Statistics.cov(relation::PrecisionForm)
+    cov(CovarianceForm(relation))
+end
+
+
+function Statistics.mean(relation::GaussianRelation)
+    params(relation, 3)
 end
 
 

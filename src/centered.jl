@@ -189,34 +189,55 @@ function push_epi(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST},
     m = length(dom(f))
     n = length(codom(f))
 
-    Π = Matrix(relation.precision)
-    Σ = Matrix(relation.support)
-
-    P = Matrix{eltype(PT)}(undef, m, m)
-    S = Matrix{eltype(ST)}(undef, m, m)
-    
     section = zeros(Int, n)
     indices = zeros(Int, n)
+    parent  = zeros(Int, m)
 
     for i in 1:m
         v = f(i)
 
         if iszero(section[v])
             section[v] = i
-            P[:, i] = Π[:, i]
-            S[:, i] = Σ[:, i]
         else
-            j = indices[v]
-            Π[i, :] -= relation.precision[j, :]
-            Σ[i, :] -= relation.support[j, :]
-            P[:, i] = Π[:, i] - Π[:, j]
-            S[:, i] = Σ[:, i] - Σ[:, j]
+            parent[i] = indices[v]
         end
 
         indices[v] = i
     end
 
-    pull_mono(FinFunction(section, m), CenteredGaussianRelation{T}(Symmetric(P), Symmetric(S)), Val(T))
+    P = Matrix{eltype(PT)}(undef, m, m)
+    S = Matrix{eltype(ST)}(undef, m, m)
+
+    for i₁ in 1:m
+        j₁ = parent[i₁]
+
+        for i₂ in 1:m
+            j₂ = parent[i₂]
+
+            p = relation.precision[i₁, i₂]
+            s = relation.support[i₁, i₂]
+
+            if !iszero(j₁)
+                p -= relation.precision[j₁, i₂]
+                s -= relation.support[j₁, i₂]
+            end
+
+            if !iszero(j₂)
+                p -= relation.precision[i₁, j₂]
+                s -= relation.support[i₁, j₂]
+            end
+
+            if !iszero(j₁) && !iszero(j₂)
+                p += relation.precision[j₁, j₂]
+                s += relation.support[j₁, j₂]
+            end
+
+            P[i₁, i₂] = p
+            S[i₁, i₂] = s
+        end
+    end
+
+    pull_mono(FinFunction(section, m), CenteredGaussianRelation{T}(P, S), Val(T))
 end
 
 

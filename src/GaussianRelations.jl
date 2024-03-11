@@ -3,7 +3,7 @@ module GaussianRelations
 
 export CenteredGaussianRelation, CenteredPrecisionForm, CenteredCovarianceForm
 export GaussianRelation, PrecisionForm, CovarianceForm
-export disintegrate, kleisli, oapply, otimes, params, push, pull
+export cov, disintegrate, kleisli, mean, oapply, otimes, params, push, pull
 
 
 using Catlab.ACSetInterface
@@ -15,6 +15,7 @@ using Catlab.WiringDiagramAlgebras
 using FillArrays
 using LinearAlgebra
 using LinearAlgebra: checksquare
+using Statistics
 using StatsAPI
 using StatsAPI: params
 
