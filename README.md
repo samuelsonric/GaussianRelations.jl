@@ -1,9 +1,11 @@
 # GaussianRelations.jl
 
-[![tests](https://github.com/samuelsonric/GaussianRelations.jl/workflows/tests/badge.svg)](https://github.com/samuelsonric/GaussianRelations.jl/actions/workflows/tests.yml?query=workflow%3Atests)
+[![tests](https://github.com/samuelsonric/GaussianRelations.jl/actions/workflows/tests.yml/badge.svg)](https://github.com/samuelsonric/GaussianRelations.jl/actions/workflows/tests.yml?query=workflow%3Atests)
 [![codecov](https://codecov.io/gh/samuelsonric/GaussianRelations.jl/graph/badge.svg?token=pVcto1pdzK)](https://codecov.io/gh/samuelsonric/GaussianRelations.jl)
 
 GaussianRelations.jl is a Julia library that provides tools for working with Gaussian linear systems. It accompanies the paper [A Categorical Treatment of Open Linear Systems](https://arxiv.org/abs/2403.03934).
+
+## Example: A Noisy Resistor
 
 In Example 1 and Example 3 of the paper [Open Stochastic Systems](https://ieeexplore.ieee.org/abstract/document/6255764), Jan Willems defines a Gaussian linear system that he calls the "noisy resistor". Using our library, the noisy resistor can be implemented as follows.
 
