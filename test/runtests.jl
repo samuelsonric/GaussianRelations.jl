@@ -82,8 +82,8 @@ end
         @test params(M * relation, 3) ≅ M * m
         @test params(M \ relation, 1) ≅ M' * P * M
         @test params(M \ relation, 3) ≅ inv(M' * P * M) * M' * P * m
-        @test params(otimes(relation, relation), 1) ≅ cat(P, P; dims=(1, 2))
-        @test params(otimes(relation, relation), 3) ≅ [m; m]
+        @test params(otimes(relation, relation, relation), 1) ≅ cat(P, P, P; dims=(1, 2))
+        @test params(otimes(relation, relation, relation), 3) ≅ [m; m; m]
         @test params(CovarianceForm(relation), 1) ≅ C
         @test params(CovarianceForm(relation), 3) ≅ m
         @test params(marginal, 1) ≅ inv(C[mask, mask])
@@ -109,8 +109,8 @@ end
         @test params(M * relation, 3) ≅ M * m
         @test params(M \ relation, 1) ≅ inv(M' * P * M)
         @test params(M \ relation, 3) ≅ inv(M' * P * M) * M' * P * m
-        @test params(otimes(relation, relation), 1) ≅ cat(C, C; dims=(1, 2))
-        @test params(otimes(relation, relation), 3) ≅ [m; m]
+        @test params(otimes(relation, relation, relation), 1) ≅ cat(C, C, C; dims=(1, 2))
+        @test params(otimes(relation, relation, relation), 3) ≅ [m; m; m]
         @test params(PrecisionForm(relation), 1) ≅ P
         @test params(PrecisionForm(relation), 3) ≅ m
         @test params(marginal, 1) ≅ C[mask, mask]

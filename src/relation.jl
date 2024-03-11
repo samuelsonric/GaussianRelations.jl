@@ -93,7 +93,7 @@ end
 
 
 function Theories.otimes(relations::GaussianRelation{T, PT, ST}...) where {T, PT, ST}
-    init = GaussianRelation(CenteredGaussianRelation{T, PT, ST}([T;;]))
+    init = GaussianRelation(CenteredGaussianRelation{T, PT, ST}([T;;], [T;;]))
     reduce(otimes, relations; init)
 end
 
