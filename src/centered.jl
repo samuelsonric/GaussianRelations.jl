@@ -1,194 +1,260 @@
 # A centered Gaussian relation.
-abstract type CenteredGaussianRelation <: GaussianRelation end
+struct CenteredGaussianRelation{T, PT <: AbstractMatrix, ST <: AbstractMatrix}
+    precision::PT
+    support::ST
+
+    function CenteredGaussianRelation{T}(P::PT, S::ST) where {T, PT <: AbstractMatrix, ST <: AbstractMatrix}
+        m = checksquare(P)
+        n = checksquare(S)
+        @assert m == n
+        new{T, PT, ST}(P, S)
+    end
+end
 
 
 # A centered Gaussian relation in precision form.
-struct CenteredPrecisionForm{T₁ <: AbstractMatrix, T₂ <: AbstractMatrix} <: CenteredGaussianRelation
-    Ω::T₁
-    S::T₂
-end
+const CenteredPrecisionForm = CenteredGaussianRelation{false}
 
 
 # A centered Gaussian relation in covariance form.
-struct CenteredCovarianceForm{T₁ <: AbstractMatrix, T₂ <: AbstractMatrix} <: CenteredGaussianRelation
-    Σ::T₁
-    F::T₂
+const CenteredCovarianceForm = CenteredGaussianRelation{true}
+
+
+function CenteredGaussianRelation{T}(relation::CenteredGaussianRelation{T}) where T
+    CenteredGaussianRelation{T}(relation.precision, relation.support)
 end
 
 
-# Construct the precision form of a centered Gaussian relation.
-function CenteredPrecisionForm(relation::CenteredPrecisionForm)
-    CenteredPrecisionForm(relation.Ω, relation.S)
+function CenteredGaussianRelation{T}(relation::CenteredGaussianRelation) where T
+    P, S = params(relation)
+    U, V, D = factorizepsd(P + S)
+    M = solvespp(D, quad(S, V), I, 0I)
+    CenteredGaussianRelation{T}(quad(D, M * V'), quad(I, U'))
 end
 
 
-# Construct the precision form of a centered Gaussian relation.
-function CenteredPrecisionForm(relation::CenteredCovarianceForm; tol::Real=DEFAULT_TOLERANCE)
-    dual(CenteredCovarianceForm(dual(relation); tol))
+function CenteredGaussianRelation{T}(P::AbstractMatrix) where T
+    n = size(P, 1)
+    CenteredGaussianRelation{T}(P, Zeros(n, n))
 end
 
 
-# Construct the centered Gaussian relation
-#     N(0, Ω⁻¹)
-# in precision form.
-function CenteredPrecisionForm(Ω::AbstractMatrix)
-    n = size(Ω, 1)
-    CenteredPrecisionForm(Ω, Zeros(n, n))
+function CenteredGaussianRelation{T, PT, ST}(args...; kwargs...) where {T, PT, ST}
+    P, S = params(CenteredGaussianRelation{T}(args...; kwargs...))
+    CenteredGaussianRelation{T}(convert(PT, P), convert(ST, S))
 end
 
 
-# Construct the covariance form of a centered Gaussian relation.
-function CenteredCovarianceForm(relation::CenteredPrecisionForm; tol::Real=DEFAULT_TOLERANCE)
-    Ω, S = params(relation)
-    U, V, D = factorizepsd(Ω + S; tol)
-    M = solvespp(D, V' * S * V, I, 0I; tol)
-    
-    Σ = V * M' * D * M * V'
-    F = U * U'
-    CenteredCovarianceForm(Σ, F)
+function Base.length(relation::CenteredGaussianRelation)
+    size(relation.precision, 1)
 end
 
 
-# Construct the covariance form of centered Gaussian relation.
-function CenteredCovarianceForm(relation::CenteredCovarianceForm)
-    CenteredCovarianceForm(relation.Σ, relation.F)
+function StatsAPI.params(relation::CenteredGaussianRelation, i::Integer)
+    @assert 1 <= i <= 2
+    params(relation)[i]
 end
 
 
-# Construct the centered Gaussian relation
-#     N(0, Σ)
-# in covariance form.
-function CenteredCovarianceForm(Σ::AbstractMatrix)
-    n = size(Σ, 1)
-    CenteredCovarianceForm(Σ, Zeros(n, n))
+function StatsAPI.params(relation::CenteredGaussianRelation)
+    relation.precision, relation.support
 end
 
 
-# Get the arity of a centered Gaussian relation.
-function Base.length(relation::CenteredPrecisionForm)
-    size(relation.Ω, 1)
+function Theories.otimes(left::CenteredGaussianRelation{T}, right::CenteredGaussianRelation{T}) where T
+    P₁, S₁ = params(left)
+    P₂, S₂ = params(right)
+    CenteredGaussianRelation{T}(cat(P₁, P₂, dims=(1, 2)), cat(S₁, S₂, dims=(1, 2)))
 end
 
 
-# Get the arity of a centered Gaussian relation.
-function Base.length(relation::CenteredCovarianceForm)
-    length(dual(relation))
+function pull(M::AbstractMatrix, relation::CenteredGaussianRelation{T}, ::Val{T}) where T
+    P, S = params(relation)
+    CenteredGaussianRelation{T}(quad(P, M), quad(S, M))
 end
 
 
-# Get the parameters of a centered Gaussian relation.
-function StatsAPI.params(relation::CenteredPrecisionForm)
-    relation.Ω, relation.S
+function pull(M::AbstractMatrix, relation::CenteredGaussianRelation, ::Val{T}) where T
+    CenteredGaussianRelation{!T}(pull(M, CenteredGaussianRelation{T}(relation), Val(T)))
 end
 
 
-# Get the parameters of a centered Gaussian relation.
-function StatsAPI.params(relation::CenteredCovarianceForm)
-    relation.Σ, relation.F
+function pull(f::FinFunction, relation::CenteredGaussianRelation{T}, ::Val{T}) where T
+    epi, mono = epi_mono(f)
+    pull_epi(epi, pull_mono(mono, relation, Val(T)), Val(T))
 end
 
 
-# Compute the dual of a centered Gaussian relation.
-function dual(relation::CenteredPrecisionForm)
-    Ω, S = params(relation)
-    CenteredCovarianceForm(Ω, S)
+function pull(f::FinFunction, relation::CenteredGaussianRelation{T}, ::Val) where T
+    f = collect(f)
+    P = relation.precision[f, f]
+    S = relation.support[f, f]
+    CenteredGaussianRelation{T}(P, S) 
 end
 
 
-# Compute the dual of a centered Gaussian relation.
-function dual(relation::CenteredCovarianceForm)
-    Σ, F = params(relation)
-    CenteredPrecisionForm(Σ, F)
+function pull_epi(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST}, ::Val{T}) where {T, PT, ST}
+    m = length(dom(f))
+    n = length(codom(f))
+
+    P = zeros(eltype(PT), m, m)
+    S = zeros(eltype(ST), m, m)
+
+    section = zeros(Int, n)
+    indices = zeros(Int, n)
+
+    for i in 1:m
+        v = f(i)
+
+        if iszero(section[v])
+            section[v] = i
+        else
+            j = indices[v]
+            S[i, i] += 1
+            S[j, j] += 1
+            S[i, j] = S[j, i] = -1      
+        end
+
+        indices[v] = i
+    end
+
+    P[section, section] .+= relation.precision
+    S[section, section] .+= relation.support
+
+    CenteredGaussianRelation{T}(P, S)
 end
 
 
-function otimes(left::CenteredPrecisionForm, right::CenteredPrecisionForm)
-    Ω₁, S₁ = params(left)
-    Ω₂, S₂ = params(right)
-    Ω = cat(Ω₁, Ω₂, dims=(1, 2))
-    S = cat(S₁, S₂, dims=(1, 2))
-    CenteredPrecisionForm(Ω, S)
+function pull_epi(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST}, ::Val) where {T, PT, ST}
+    pull(f, relation, Val(!T))
 end
 
 
-function otimes(left::CenteredCovarianceForm, right::CenteredCovarianceForm)
-    dual(otimes(dual(left), dual(right)))
-end
+function pull_mono(f::FinFunction, relation::CenteredGaussianRelation{T}, ::Val{T}) where T
+    n = length(relation)
+    P, S = params(relation)
 
+    i₁ = trues(n)
+    i₂ = collect(f)
+    i₁[i₂] .= false
 
-# Compute the composite
-#     (f ; M†): 0 → m
-# where f: 0 → n is a centered Gaussian relation and M: m → n. is a matrix.
-function Base.:\(M::AbstractMatrix, relation::CenteredPrecisionForm)
-    Ω, S = params(relation)
-    CenteredPrecisionForm(M' * Ω * M, M' * S * M)
-end
-
-
-# Compute the composite
-#     (f ; M†): 0 → m
-# where f: 0 → n is a centered Gaussian relation and M: m → n. is a matrix.
-function Base.:\(M::AbstractMatrix, relation::CenteredCovarianceForm)
-    CenteredCovarianceForm(M \ CenteredPrecisionForm(relation))
-end
-
-
-# Compute the composite
-#     (f ; M): 0 → n
-# where f: 0 → m is a centered Gaussian relation and M: m → n is a matrix.
-function Base.:*(M::AbstractMatrix, relation::CenteredPrecisionForm)
-    CenteredPrecisionForm(M * CenteredCovarianceForm(relation))
-end
-
-
-# Compute the composite
-#     (f ; M): 0 → n
-# where f: 0 → m is a centered Gaussian relation and M: m → n is a matrix.
-function Base.:*(M::AbstractMatrix, relation::CenteredCovarianceForm)
-    dual(M' \ dual(relation))
-end
-
-
-# Given a centered Gaussian relation
-#     f: 0 → m + n,
-# compute a matrix
-#     M: m → n
-# and centered Gaussian relations
-#     g: 0 → m and h: 0 → n
-# such that
-#     f = (g ⊗ h) ; [ I 0 ]
-#                   [ M I ].
-function disintegrate(relation::CenteredPrecisionForm, mask::AbstractVector{Bool}; tol::Real=DEFAULT_TOLERANCE)
-    i₁ = .!mask
-    i₂ =   mask
-    Ω, S = params(relation)
-
-    Ω₁₁, Ω₁₂, Ω₂₁, Ω₂₂ = getblocks(Ω, i₁, i₂)
+    P₁₁, P₁₂, P₂₁, P₂₂ = getblocks(P, i₁, i₂)
     S₁₁, S₁₂, S₂₁, S₂₂ = getblocks(S, i₁, i₂)
-    M = solvespp(Ω₁₁, S₁₁, Ω₁₂, S₁₂; tol)
+    M = solvespp(P₁₁, S₁₁, P₁₂, S₁₂)
 
-    marginal = CenteredPrecisionForm(
-        Ω₂₂ + M' * Ω₁₁ * M - Ω₂₁ * M - M' * Ω₁₂, 
-        S₂₂ - M' * S₁₁ * M)
-
-    conditional = CenteredPrecisionForm(Ω₁₁, S₁₁)
-
-    marginal, conditional, M
+    CenteredGaussianRelation{T}(
+        P₂₂ + quad(P₁₁, M) - P₂₁ * M - M' * P₁₂, 
+        S₂₂ - quad(S₁₁, M))
 end
 
 
-# Given a centered Gaussian relation
-#     f: 0 → m + n,
-# compute a matrix
-#     M: m → n
-# and centered Gaussian relations
-#     g: 0 → m and h: 0 → n
-# such that
-#     f = (g ⊗ h) ; [ I 0 ]
-#                   [ M I ].
-function disintegrate(relation::CenteredCovarianceForm, mask::AbstractVector{Bool}; tol::Real=DEFAULT_TOLERANCE)
-    marginal, conditional, M = disintegrate(dual(relation), .!mask)
-    dual(conditional), dual(marginal), -M'
+function pull_mono(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST}, ::Val) where {T, PT, ST}
+    pull(f, relation, Val(!T))
+end
+
+
+function push(M::AbstractMatrix, relation::CenteredGaussianRelation, ::Val{T}) where T
+    pull(M', relation, Val(!T))
+end
+
+
+function push(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST}, ::Val{T}) where {T, PT, ST}
+    m = length(dom(f))
+    n = length(codom(f))
+
+    P = zeros(eltype(PT), n, n)
+    S = zeros(eltype(ST), n, n)
+
+    for i in 1:m, j in 1:m
+        P[f(i), f(j)] += relation.precision[i, j]
+        S[f(i), f(j)] += relation.support[i, j]
+    end
+
+    CenteredGaussianRelation{T}(P, S)
+end
+
+
+function push(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST}, ::Val) where {T, PT, ST}
+    epi, mono = epi_mono(f)
+    push_mono(mono, push_epi(epi, relation, Val(!T)), Val(!T))
+end
+
+
+function push_epi(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST}, ::Val{T}) where {T, PT, ST}
+    push(f, relation, Val(T))
+end
+
+
+function push_epi(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST}, ::Val) where {T, PT, ST}
+    m = length(dom(f))
+    n = length(codom(f))
+
+    Π = Matrix(relation.precision)
+    Σ = Matrix(relation.support)
+
+    P = Matrix{eltype(PT)}(undef, m, m)
+    S = Matrix{eltype(ST)}(undef, m, m)
+    
+    section = zeros(Int, n)
+    indices = zeros(Int, n)
+
+    for i in 1:m
+        v = f(i)
+
+        if iszero(section[v])
+            section[v] = i
+            P[:, i] = Π[:, i]
+            S[:, i] = Σ[:, i]
+        else
+            j = indices[v]
+            Π[i, :] -= relation.precision[j, :]
+            Σ[i, :] -= relation.support[j, :]
+            P[:, i] = Π[:, i] - Π[:, j]
+            S[:, i] = Σ[:, i] - Σ[:, j]
+        end
+
+        indices[v] = i
+    end
+
+    pull_mono(FinFunction(section, m), CenteredGaussianRelation{T}(Symmetric(P), Symmetric(S)), Val(T))
+end
+
+
+function push_mono(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST}, ::Val{T}) where {T, PT, ST}
+    push(f, relation, Val(T))
+end
+
+
+function push_mono(f::FinFunction, relation::CenteredGaussianRelation{T, PT, ST}, ::Val) where {T, PT, ST}
+    n = length(codom(f))
+    indices = collect(f)
+
+    P = zeros(eltype(PT), n, n)
+    S = Matrix{eltype(ST)}(I, n, n)
+
+    P[indices, indices] = relation.precision
+    S[indices, indices] = relation.support
+
+    CenteredGaussianRelation{T}(P, S)
+end
+
+
+function disintegrate(relation::CenteredGaussianRelation{T}, mask::AbstractVector{Bool}) where T
+    i₁ = !T .⊻ mask
+    i₂ =  T .⊻ mask
+    P, S = params(relation)
+
+    P₁₁, P₁₂, P₂₁, P₂₂ = getblocks(P, i₁, i₂)
+    S₁₁, S₁₂, S₂₁, S₂₂ = getblocks(S, i₁, i₂)
+    M = solvespp(P₁₁, S₁₁, P₁₂, S₁₂)
+
+    r₁ = CenteredGaussianRelation{T}(P₁₁, S₁₁)
+
+    r₂ = CenteredGaussianRelation{T}(
+        P₂₂ + quad(P₁₁, M) - P₂₁ * M - M' * P₁₂, 
+        S₂₂ - quad(S₁₁, M))
+
+    T ? (r₁, r₂, -M') : (r₂, r₁, M)
 end
 
 
@@ -201,7 +267,6 @@ function getblocks(M::AbstractMatrix, i₁::AbstractVector, i₂::AbstractVector
     M₁₂ = M[i₁, i₂]
     M₂₁ = M[i₂, i₁]
     M₂₂ = M[i₂, i₂]
-
     M₁₁, M₁₂, M₂₁, M₂₂
 end
 
@@ -212,15 +277,12 @@ end
 # where A and B are positive semidefinite, e ∈ col A, and f ∈ col B.
 function solvespp(A::AbstractMatrix, B::AbstractMatrix, e, f; tol::Real=DEFAULT_TOLERANCE)
     U, V, D = factorizepsd(B; tol)
-    Uᵀ_A_U = qr(U' * A * U, ColumnNorm())
+    Uᵀ_A_U = qr(quad(A, U), ColumnNorm())
 
-    f = V' * f
-    v = D \ f
+    v = V * (D \ (V' * f))
+    u = U * (Uᵀ_A_U \ (U' * (e - A * v)))
 
-    e = U' * (e - A * V * v)
-    u = Uᵀ_A_U \ e
-    
-    U * u + V * v
+    u + v    
 end
 
 
@@ -241,4 +303,36 @@ function factorizepsd(A::AbstractMatrix; tol::Real=DEFAULT_TOLERANCE)
     D  = Diagonal(D[n + 1:end])
 
     U, V, D
+end
+
+
+# Compute
+#     Mᵀ A M,
+# where A is positive semidefinite.
+function quad(A, M::AbstractMatrix)
+    Symmetric(M' * A * M)
+end
+
+
+# Factorize a function f: i → k as a composite
+#    f = e ; m,
+# where e: i → j is a surjection and m: j → k is an injection.
+function epi_mono(f::FinFunction)    
+    epi = zeros(Int, length(codom(f)))
+    mono = zeros(Int, 0)
+    
+    for i in dom(f)
+        j = f(i)
+        
+        if iszero(epi[j])
+            push!(mono, j)
+            epi[j] = length(mono)
+        end
+    end
+    
+    set = FinSet(length(mono))
+    epi = FinDomFunctionVector(epi[collect(f)], dom(f), set)
+    mono = FinDomFunctionVector(mono, set, codom(f))
+    
+    epi, mono
 end
